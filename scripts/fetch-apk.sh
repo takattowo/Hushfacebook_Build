@@ -21,9 +21,9 @@ echo "== Download $PACKAGE version $VERSION"
 "$APKEEP" -a "$PACKAGE@$VERSION" -d apk-pure -o 'acknowledge_dangers=true' apk/
 ls -la apk/
 
-APK=$(find apk -maxdepth 1 -name '*.apk' | head -n1 || true)
+APK=$(find apk -maxdepth 1 -type f \( -name '*.apk' -o -name '*.xapk' -o -name '*.apkm' -o -name '*.apks' \) | head -n1 || true)
 if [ -z "$APK" ]; then
-  echo "::error::apkeep produced no APK for $VERSION. Check apkeep-versions.txt above."
+  echo "::error::apkeep produced no APK/XAPK for $VERSION. Check apkeep-versions.txt above."
   exit 1
 fi
 
