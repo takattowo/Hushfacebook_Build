@@ -142,6 +142,36 @@ def _browser_resolve_redirect(url, timeout=60):
 apktap_http._browser_get = _browser_get
 apktap_http._browser_resolve_redirect = _browser_resolve_redirect
 
+
+# apktap launches playwright's chromium-headless-shell, which Cloudflare
+# identifies and serves an endless challenge to. Replace ensure() with one
+# that runs the FULL Chromium - headed when a display exists (xvfb-run in
+# CI), new headless otherwise.
+def _ensure(cls):
+    if cls._browser is not None:
+        return
+    import os
+    from playwright.sync_api import sync_playwright
+    cls._pw = sync_playwright().start()
+    cls._browser = cls._pw.chromium.launch(
+        headless=not os.environ.get("DISPLAY"),
+        args=[
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-gpu",
+            "--disable-blink-features=AutomationControlled",
+        ],
+    )
+    cls._context = cls._browser.new_context(
+        user_agent=apktap_http.HEADERS["User-Agent"],
+        locale="en-US",
+        viewport={"width": 1920, "height": 1080},
+    )
+
+
+_Browser.ensure = classmethod(_ensure)
+
 PACKAGE = "com.facebook.katana"
 ARCH = "arm64-v8a"
 DPI = "120-640dpi"

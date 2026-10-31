@@ -7,15 +7,19 @@ VERSION="$1"
 mkdir -p apk
 
 echo "== Install apktap (GitHub - not on PyPI) + CF bypass chain"
-pip install --quiet curl_cffi cloudscraper
+pip install --quiet curl_cffi cloudscraper playwright
 pip install --quiet "git+https://github.com/Llucs/ApkTap.git"
+# Full Chromium (apktap would only grab chromium-headless-shell, which
+# Cloudflare challenges forever); xvfb gives it a real display so it runs headed.
+python -m playwright install --with-deps chromium
+sudo apt-get install -y -qq xvfb >/dev/null 2>&1 || true
 
 echo "== Fetch Facebook $VERSION from APKMirror"
 # Cloudflare challenge clearance from datacenter IPs is flaky - retry with backoff.
 ok=false
 for attempt in 1 2 3 4; do
   echo "-- fetch attempt $attempt"
-  if python scripts/fetch_apkmirror.py "$VERSION" apk; then
+  if xvfb-run -a python scripts/fetch_apkmirror.py "$VERSION" apk; then
     ok=true
     break
   fi
