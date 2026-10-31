@@ -41,7 +41,7 @@ $PATCH_NOTE
 
 ## Updates
 
-New releases appear here automatically when Hushfacebook or the supported Facebook version changes. This APK updates only over builds signed with the same key - keep this repo's \`keystore.p12\` if you maintain a fork.
+New releases appear here automatically when Hushfacebook or the supported Facebook version changes. Android only allows updates signed with the same key.
 
 Patch settings live inside the app: long-press the Facebook logo (Hushfacebook settings).
 EOF

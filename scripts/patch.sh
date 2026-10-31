@@ -8,6 +8,12 @@ HUSH_TAG="$2"
 APK="$3"
 EXPERT="${EXPERT:-false}"
 
+: "${KEYSTORE_BASE64:?Missing KEYSTORE_BASE64 Actions secret}"
+: "${KEYSTORE_PASSWORD:?Missing KEYSTORE_PASSWORD Actions secret}"
+KEYSTORE_FILE=$(mktemp "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/hushfacebook-keystore.XXXXXX")
+trap 'rm -f "$KEYSTORE_FILE"' EXIT
+printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_FILE"
+
 JAR=$(ls morphe-desktop-*-all.jar)
 MPP=$(ls patches-*.mpp)
 
@@ -15,16 +21,16 @@ SUFFIX=""
 if [ "$EXPERT" = "true" ]; then
   SUFFIX="-expert"
 fi
-OUT="Facebook-${FB_VERSION}-${HUSH_TAG}-Hushfacebook${SUFFIX}.apk"
+OUT="Hushfacebook-${FB_VERSION}-${HUSH_TAG}${SUFFIX}.apk"
 
 ARGS=(
   patch
   -p "$MPP"
   -o "$OUT"
-  --keystore keystore.p12
-  --keystore-password HushBuild2026
+  --keystore "$KEYSTORE_FILE"
+  --keystore-password "$KEYSTORE_PASSWORD"
   --keystore-entry-alias hush
-  --keystore-entry-password HushBuild2026
+  --keystore-entry-password "$KEYSTORE_PASSWORD"
 )
 
 if [ "$EXPERT" = "true" ]; then

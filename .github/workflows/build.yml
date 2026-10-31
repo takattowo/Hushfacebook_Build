@@ -53,6 +53,8 @@ jobs:
         id: patch
         env:
           EXPERT: ${{ inputs.expert == true }}
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: bash scripts/patch.sh "${{ steps.probe.outputs.fb_version }}" "${{ steps.probe.outputs.hush_tag }}" "${{ steps.fetch.outputs.apk }}"
 
       - name: Upload artifact

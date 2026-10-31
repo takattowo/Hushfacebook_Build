@@ -9,3 +9,4 @@ list-versions.txt
 morphe-data/
 __pycache__/
 *.pyc
+keystore.p12
