@@ -49,6 +49,34 @@ def _is_challenge(body_text):
     head = body_text[:4000]
     return any(m in head for m in CF_MARKERS)
 
+def _try_click_challenge(page):
+    """CF serves an interactive checkbox challenge to datacenter IPs -
+    it never clears without a click."""
+    frames = []
+    for f in page.frames:
+        u = f.url or ""
+        if "challenges.cloudflare.com" in u or "cdn-cgi/challenge-platform" in u:
+            frames.append(f)
+    try:
+        frames.append(page.main_frame)
+    except Exception:
+        pass
+    for f in frames:
+        for sel in ("input[type='checkbox']",
+                    "#challenge-stage input[type='checkbox']",
+                    "input"):
+            try:
+                f.locator(sel).first.click(timeout=1200)
+                return True
+            except Exception:
+                continue
+        try:  # turnstile checkbox sits near the left edge, mid-height
+            f.locator("body").click(timeout=1200, position={"x": 32, "y": 33})
+            return True
+        except Exception:
+            continue
+    return False
+
 def _browser_get(url, method="GET", timeout=60):
     try:
         _Browser.ensure()
@@ -59,8 +87,9 @@ def _browser_get(url, method="GET", timeout=60):
     page.add_init_script(_BROWSER_STEALTH_INIT)
     try:
         page.goto(url, timeout=45 * 1000, wait_until="domcontentloaded")
-        deadline = time.time() + 120
+        deadline = time.time() + 90
         body = ""
+        last_click = 0.0
         while time.time() < deadline:
             try:
                 body = page.content()
@@ -69,6 +98,9 @@ def _browser_get(url, method="GET", timeout=60):
                 continue
             if not _is_challenge(body):
                 break
+            if time.time() - last_click > 5:
+                _try_click_challenge(page)
+                last_click = time.time()
             time.sleep(2)
         try:
             page.wait_for_load_state("networkidle", timeout=15000)
@@ -112,7 +144,8 @@ def _browser_resolve_redirect(url, timeout=60):
     page.add_init_script(_BROWSER_STEALTH_INIT)
     try:
         page.goto(url, timeout=timeout * 1000, wait_until="domcontentloaded")
-        deadline = time.time() + 60
+        deadline = time.time() + 90
+        last_click = 0.0
         while time.time() < deadline:
             try:
                 cur = page.url
@@ -128,6 +161,9 @@ def _browser_resolve_redirect(url, timeout=60):
                     pass
                 _sync_cookies_to_urllib()
                 return page.url
+            if time.time() - last_click > 5:
+                _try_click_challenge(page)
+                last_click = time.time()
             time.sleep(2)
         return None
     except Exception as e:

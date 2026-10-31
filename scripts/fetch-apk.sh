@@ -17,17 +17,19 @@ sudo apt-get install -y -qq xvfb >/dev/null 2>&1 || true
 echo "== Fetch Facebook $VERSION from APKMirror"
 # Cloudflare challenge clearance from datacenter IPs is flaky - retry with backoff.
 ok=false
-for attempt in 1 2 3 4; do
+for attempt in 1 2 3 4 5 6; do
   echo "-- fetch attempt $attempt"
   if xvfb-run -a python scripts/fetch_apkmirror.py "$VERSION" apk; then
     ok=true
     break
   fi
-  echo "attempt $attempt failed; sleeping $((attempt * 30))s"
-  sleep $((attempt * 30))
+  sleep_for=$(( attempt * 30 ))
+  [ "$sleep_for" -gt 120 ] && sleep_for=120
+  echo "attempt $attempt failed; sleeping ${sleep_for}s"
+  sleep "$sleep_for"
 done
 if [ "$ok" != "true" ]; then
-  echo "::error::APKMirror fetch failed after 4 attempts"
+  echo "::error::APKMirror fetch failed after 6 attempts"
   exit 1
 fi
 
