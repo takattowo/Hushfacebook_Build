@@ -1,0 +1,9 @@
+# downloaded during CI, never committed
+*.apk
+*.apkm
+*.mpp
+morphe-desktop*.jar
+apkeep-*
+apk/
+list-versions.txt
+morphe-data/
