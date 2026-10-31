@@ -168,7 +168,8 @@ def solve_turnstile(page, timeout=120):
 
 
 def fetch_download_url(ctx, file_id, token):
-    url = f"{UT_BASE}/ajax/app/16791/file/{file_id}/download-url"
+    # site root, NOT under /android (UT_BASE) - that 404s
+    url = f"https://facebook.en.uptodown.com/ajax/app/16791/file/{file_id}/download-url"
     resp = ctx.request.post(
         url,
         headers={
