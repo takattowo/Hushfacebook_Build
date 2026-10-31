@@ -20,8 +20,8 @@ import time
 import urllib.request
 
 UT_BASE = "https://facebook.en.uptodown.com/android"
-UA = ("Mozilla/5.0 (X11; Linux x86_64; rv:135.0) Gecko/20100101 "
-      "Firefox/135.0")
+UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+      "Chrome/156.0.0.0 Safari/537.36")
 
 
 def log(*a):
@@ -69,7 +69,11 @@ def _try_click_turnstile(page):
 
 
 def solve_turnstile(page, timeout=120):
-    """Render + execute the widget ourselves, return a token or None."""
+    """Render + execute the widget ourselves, return a token or None.
+
+    Turnstile error 600010 ("bot behavior detected") is retryable - reset
+    the widget and execute again, up to 6 rounds.
+    """
     JS = """() => {
         const el = document.getElementById('download-turnstile-widget');
         if (!el) return 'no-widget-element';
@@ -97,17 +101,25 @@ def solve_turnstile(page, timeout=120):
     if setup != "started":
         return None
 
-    deadline = time.time() + timeout
+    round_deadline = time.time() + timeout
     last_click = 0.0
-    while time.time() < deadline:
+    while time.time() < round_deadline:
         tok = page.evaluate("window.__tok")
         if tok:
             log("turnstile token received")
             return tok
         err = page.evaluate("window.__terr")
         if err:
-            log(f"::warning::turnstile error: {err}")
-            return None
+            log(f"::warning::turnstile error {err}; resetting widget")
+            time.sleep(2)
+            page.evaluate("""() => {
+                window.__tok = null; window.__terr = null;
+                window.turnstile.reset(window.__tid);
+                window.turnstile.execute(window.__tid);
+            }""")
+            last_click = 0.0
+            # do not burn the whole budget on one error storm
+            round_deadline = min(round_deadline, time.time() + 45)
         if time.time() - last_click > 5:
             _try_click_turnstile(page)
             last_click = time.time()
@@ -137,14 +149,22 @@ def fetch_download_url(ctx, file_id, token):
 
 
 def download(file_id, version, out):
-    from playwright.sync_api import sync_playwright
+    # patchright = playwright fork with anti-bot patches; without it plain
+    # playwright gets flagged by Turnstile ("600010 bot behavior detected")
+    try:
+        from patchright.sync_api import sync_playwright
+        launcher = "patchright"
+    except ImportError:
+        from playwright.sync_api import sync_playwright
+        launcher = "playwright"
+    log(f"browser launcher: {launcher}")
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=not os.environ.get("DISPLAY"),
+            channel="chromium",
             args=["--no-sandbox", "--disable-setuid-sandbox",
-                  "--disable-dev-shm-usage", "--disable-gpu",
-                  "--disable-blink-features=AutomationControlled"],
+                  "--disable-dev-shm-usage", "--disable-gpu"],
         )
         ctx = browser.new_context(user_agent=UA, locale="en-US",
                                   viewport={"width": 1920, "height": 1080})
