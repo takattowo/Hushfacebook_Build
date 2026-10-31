@@ -22,6 +22,10 @@ import urllib.request
 UT_BASE = "https://facebook.en.uptodown.com/android"
 UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/156.0.0.0 Safari/537.36")
+# plain page fetches (urllib) from CI IPs only ever worked with this Firefox
+# UA - the Chrome UA above gets HTTP 404 on /versions
+UA_FETCH = ("Mozilla/5.0 (X11; Linux x86_64; rv:135.0) Gecko/20100101 "
+            "Firefox/135.0")
 
 STEALTH = r"""
 Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
@@ -50,8 +54,22 @@ def log(*a):
 
 
 def pick_file_id(version):
-    req = urllib.request.Request(UT_BASE + "/versions", headers={"User-Agent": UA})
-    html = urllib.request.urlopen(req, timeout=30).read().decode("utf-8", "replace")
+    html = None
+    last_err = None
+    for attempt in range(1, 4):
+        try:
+            req = urllib.request.Request(UT_BASE + "/versions",
+                                         headers={"User-Agent": UA_FETCH,
+                                                  "Referer": "https://en.uptodown.com/"})
+            resp = urllib.request.urlopen(req, timeout=30)
+            html = resp.read().decode("utf-8", "replace")
+            break
+        except Exception as e:
+            last_err = e
+            log(f"::warning::/versions fetch attempt {attempt} failed: {e}")
+            time.sleep(5 * attempt)
+    if html is None:
+        sys.exit(f"::error::Could not load Uptodown version history: {last_err}")
     rows = re.findall(
         r'data-version-id="(\d+)"[^>]*>\s*'
         r'<span class="type[^"]*"[^>]*>[^<]*</span>\s*'
