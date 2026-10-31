@@ -11,7 +11,7 @@ A scheduled GitHub Action runs daily (plus a manual button):
 
 1. Reads the latest [Hushfacebook release](https://github.com/SysAdminDoc/Hushfacebook/releases) and downloads its `.mpp` patch bundle.
 2. Asks morphe-desktop `list-versions` which Facebook version the bundle supports.
-3. Downloads exactly that Facebook APK from APKPure (via [apkeep](https://github.com/EFForg/apkeep)).
+3. Downloads exactly that Facebook build from [Uptodown](https://uptodown.com) (version history -> "Android + 11" arm64-v8a xapk; the download button is Turnstile-gated, so the fetch runs a real Chrome under xvfb to solve it).
 4. Patches it with morphe-desktop (default Hushfacebook patch selection = every patch except the three expert ones), signs it with this repo's keystore.
 5. Publishes a GitHub Release named `<hush-tag>-fb<facebook-version>` with the APK attached.
 
@@ -35,7 +35,7 @@ Actions -> *Build patched Facebook* -> *Run workflow*:
 ## When a build fails
 
 - **Patch failure** = new Facebook version broke a Hushfacebook fingerprint, or vice versa. Nothing is released; the last good release stays. GitHub emails you on workflow failure.
-- **apkeep failure** = APKPure does not have that Facebook version yet. Retries itself the next day.
+- **Fetch failure** = Uptodown did not have that Facebook version yet, or its Turnstile gate refused the CI IP. Retries itself the next day.
 
 ## Keystore
 
@@ -48,7 +48,8 @@ Actions -> *Build patched Facebook* -> *Run workflow*:
 ```
 .github/workflows/build.yml   triggers + step wiring
 scripts/probe.sh              upstream probe, version decision
-scripts/fetch-apk.sh          apkeep download from APKPure
+scripts/fetch-apk.sh          installs browser tooling, runs the Uptodown fetch (with retries)
+scripts/fetch_uptodown.py     picks the exact version/variant, solves Turnstile, downloads
 scripts/patch.sh              morphe-desktop patch + sign
 scripts/release.sh            publish GitHub release
 keystore.p12                  signing key (KEEP PRIVATE)
