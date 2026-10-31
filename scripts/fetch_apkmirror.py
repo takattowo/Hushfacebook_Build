@@ -12,7 +12,12 @@ back to curl / cloudscraper / curl_cffi, then headless Chromium).
 import sys
 
 from apktap import api, html
+from apktap import http as apktap_http
 from apktap.http import BASE
+
+# On Cloudflare 403, fall all the way through to headless Chromium
+# (auto-installs Playwright + Chromium on first use).
+apktap_http.HEADLESS = True
 
 PACKAGE = "com.facebook.katana"
 ARCH = "arm64-v8a"
