@@ -88,13 +88,20 @@ def download(file_id, version, out):
         page.on("download", lambda d: holder.setdefault("dl", d))
 
         def on_response(resp):
+            if "turnstile" in resp.url or "download-url" in resp.url:
+                log(f"resp {resp.status} {resp.url[:160]}")
             if resp.url.endswith("/download-url"):
                 try:
                     data = resp.json()["data"]["downloadURL"]
                     api_urls.append(data)
-                except Exception:
-                    pass
+                except Exception as e:
+                    log(f"download-url parse failed: {e}")
         page.on("response", on_response)
+
+        def on_failed(req):
+            if "turnstile" in req.url or "cloudflare" in req.url:
+                log(f"requestfailed: {req.url[:160]} ({req.failure})")
+        page.on("requestfailed", on_failed)
 
         url = f"{UT_BASE}/download/{file_id}-x"
         log(f"variant page: {url}")
@@ -106,8 +113,14 @@ def download(file_id, version, out):
         if "arm64-v8a" not in body:
             raise RuntimeError("variant page is not arm64-v8a")
 
-        page.click("#detail-download-button")
+        try:
+            # force: ad/consent overlays occasionally cover the button
+            page.eval_on_selector("#detail-download-button", "el => el.click()")
+        except Exception:
+            page.click("#detail-download-button", force=True)
         log("clicked Download; waiting for Turnstile / file...")
+        log("turnstile api: " + page.evaluate(
+            "typeof window.turnstile === 'undefined' ? 'MISSING' : 'loaded'"))
 
         deadline = time.time() + 180
         last_click = 0.0
@@ -131,6 +144,17 @@ def download(file_id, version, out):
             with open(out, "wb") as fh:
                 fh.write(resp.body())
         else:
+            try:
+                diag = page.evaluate("""() => ({
+                    turnstile: typeof window.turnstile,
+                    widget: (document.getElementById('download-turnstile-widget')||{}).outerHTML,
+                    toasts: [...document.querySelectorAll('.toast, .notification, .text-box')]
+                        .map(e => e.innerText.trim()).filter(Boolean).slice(0,5),
+                    url: location.href,
+                })""")
+                log(f"diagnostics: {diag}")
+            except Exception as e:
+                log(f"diagnostics failed: {e}")
             raise RuntimeError("no download started within 180s")
         browser.close()
 
