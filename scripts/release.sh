@@ -8,6 +8,8 @@ APK="$3"
 
 TAG="$RELEASE_TAG"
 EXPERT="${EXPERT:-false}"
+AMOLED="${AMOLED:-false}"
+MATERIAL_YOU="${MATERIAL_YOU:-false}"
 FORCE="${FORCE:-false}"
 
 if [ "$FORCE" = "true" ] && gh release view "$TAG" >/dev/null 2>&1; then
@@ -23,6 +25,18 @@ fi
 PATCH_NOTE="- Patches: Hushfacebook default selection (all patches except the three expert ones)"
 if [ "$EXPERT" = "true" ]; then
   PATCH_NOTE="- Patches: all, expert trio included (AMOLED black theme, Material You theme, Disable Play Store updates)"
+  TITLE_SUFFIX=" (Expert)"
+elif [ "$AMOLED" = "true" ] && [ "$MATERIAL_YOU" = "true" ]; then
+  PATCH_NOTE="- Patches: default selection plus AMOLED black theme and Material You theme"
+  TITLE_SUFFIX=" (AMOLED + Material You)"
+elif [ "$AMOLED" = "true" ]; then
+  PATCH_NOTE="- Patches: default selection plus AMOLED black theme"
+  TITLE_SUFFIX=" (AMOLED)"
+elif [ "$MATERIAL_YOU" = "true" ]; then
+  PATCH_NOTE="- Patches: default selection plus Material You theme"
+  TITLE_SUFFIX=" (Material You)"
+else
+  TITLE_SUFFIX=""
 fi
 
 NOTES=$(cat <<EOF
@@ -49,7 +63,7 @@ EOF
 
 echo "== Creating release $TAG"
 gh release create "$TAG" "$APK" \
-  --title "Facebook $FB_VERSION + Hushfacebook $HUSH_TAG" \
+  --title "Facebook $FB_VERSION + Hushfacebook $HUSH_TAG$TITLE_SUFFIX" \
   --notes "$NOTES"
 
 echo "== Release created"

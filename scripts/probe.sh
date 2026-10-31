@@ -37,6 +37,13 @@ echo "Recommended Facebook: $FB_VERSION"
 SUFFIX=""
 if [ "${EXPERT:-false}" = "true" ]; then
   SUFFIX="-expert"
+else
+  if [ "${AMOLED:-false}" = "true" ]; then
+    SUFFIX="${SUFFIX}-amoled"
+  fi
+  if [ "${MATERIAL_YOU:-false}" = "true" ]; then
+    SUFFIX="${SUFFIX}-material-you"
+  fi
 fi
 RELEASE_TAG="${HUSH_TAG}-fb${FB_VERSION}${SUFFIX}"
 echo "Release tag: $RELEASE_TAG"

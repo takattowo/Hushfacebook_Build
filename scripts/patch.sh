@@ -7,6 +7,8 @@ FB_VERSION="$1"
 HUSH_TAG="$2"
 APK="$3"
 EXPERT="${EXPERT:-false}"
+AMOLED="${AMOLED:-false}"
+MATERIAL_YOU="${MATERIAL_YOU:-false}"
 
 : "${KEYSTORE_BASE64:?Missing KEYSTORE_BASE64 Actions secret}"
 : "${KEYSTORE_PASSWORD:?Missing KEYSTORE_PASSWORD Actions secret}"
@@ -20,6 +22,13 @@ MPP=$(ls patches-*.mpp)
 SUFFIX=""
 if [ "$EXPERT" = "true" ]; then
   SUFFIX="-expert"
+else
+  if [ "$AMOLED" = "true" ]; then
+    SUFFIX="${SUFFIX}-amoled"
+  fi
+  if [ "$MATERIAL_YOU" = "true" ]; then
+    SUFFIX="${SUFFIX}-material-you"
+  fi
 fi
 OUT="Hushfacebook-${FB_VERSION}-${HUSH_TAG}${SUFFIX}.apk"
 
@@ -33,16 +42,17 @@ ARGS=(
   --keystore-entry-password "$KEYSTORE_PASSWORD"
 )
 
+if [ "$EXPERT" = "true" ] || [ "$AMOLED" = "true" ]; then
+  ARGS+=(-e "AMOLED black theme")
+fi
+if [ "$EXPERT" = "true" ] || [ "$MATERIAL_YOU" = "true" ]; then
+  ARGS+=(-e "Material You theme")
+fi
 if [ "$EXPERT" = "true" ]; then
-  # The three patches Hushfacebook leaves out of its default selection.
-  ARGS+=(
-    -e "AMOLED black theme"
-    -e "Material You theme"
-    -e "Disable Play Store updates"
-  )
+  ARGS+=(-e "Disable Play Store updates")
 fi
 
-echo "== Patching $APK -> $OUT (expert=$EXPERT)"
+echo "== Patching $APK -> $OUT (expert=$EXPERT, amoled=$AMOLED, material_you=$MATERIAL_YOU)"
 java -jar "$JAR" "${ARGS[@]}" "$APK"
 
 if [ ! -f "$OUT" ]; then

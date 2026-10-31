@@ -13,6 +13,14 @@ on:
         description: 'Also enable AMOLED black theme, Material You theme, Disable Play Store updates'
         type: boolean
         default: false
+      amoled:
+        description: Enable only the AMOLED black theme
+        type: boolean
+        default: false
+      material_you:
+        description: Enable only the Material You theme
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -41,6 +49,8 @@ jobs:
         env:
           FORCE: ${{ inputs.force == true }}
           EXPERT: ${{ inputs.expert == true }}
+          AMOLED: ${{ inputs.amoled == true }}
+          MATERIAL_YOU: ${{ inputs.material_you == true }}
         run: bash scripts/probe.sh
 
       - name: Download Facebook APK
@@ -53,6 +63,8 @@ jobs:
         id: patch
         env:
           EXPERT: ${{ inputs.expert == true }}
+          AMOLED: ${{ inputs.amoled == true }}
+          MATERIAL_YOU: ${{ inputs.material_you == true }}
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: bash scripts/patch.sh "${{ steps.probe.outputs.fb_version }}" "${{ steps.probe.outputs.hush_tag }}" "${{ steps.fetch.outputs.apk }}"
@@ -71,5 +83,7 @@ jobs:
         env:
           RELEASE_TAG: ${{ steps.probe.outputs.release_tag }}
           EXPERT: ${{ inputs.expert == true }}
+          AMOLED: ${{ inputs.amoled == true }}
+          MATERIAL_YOU: ${{ inputs.material_you == true }}
           FORCE: ${{ inputs.force == true }}
         run: bash scripts/release.sh "${{ steps.probe.outputs.fb_version }}" "${{ steps.probe.outputs.hush_tag }}" "${{ steps.patch.outputs.out }}"
