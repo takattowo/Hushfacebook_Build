@@ -7,8 +7,10 @@ VERSION="$1"
 mkdir -p apk
 
 echo "== Install browser tooling"
-pip install --quiet patchright playwright
-patchright install --with-deps chromium || python -m playwright install --with-deps chromium
+pip install --quiet playwright
+# real Google Chrome preferred (channel=chrome); chromium as fallback
+python -m playwright install --with-deps chrome || \
+  python -m playwright install --with-deps chromium
 sudo apt-get install -y -qq xvfb >/dev/null 2>&1 || true
 
 # Turnstile clearance from CI IPs is flaky - retry with backoff.

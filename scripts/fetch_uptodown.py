@@ -23,6 +23,27 @@ UT_BASE = "https://facebook.en.uptodown.com/android"
 UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/156.0.0.0 Safari/537.36")
 
+STEALTH = r"""
+Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+if (!window.chrome) {
+  window.chrome = {runtime: {}, loadTimes: () => ({}), csi: () => ({})};
+}
+Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+const _pq = window.navigator.permissions.query.bind(window.navigator.permissions);
+window.navigator.permissions.query = (params) =>
+  params.name === 'notifications'
+    ? Promise.resolve({state: Notification.permission})
+    : _pq(params);
+// report a GPU-less Linux desktop GL stack instead of SwiftShader
+const _gp = WebGLRenderingContext.prototype.getParameter;
+WebGLRenderingContext.prototype.getParameter = function (p) {
+  if (p === 37445) return 'Google Inc. (X.org)';
+  if (p === 37446) return 'ANGLE (X.org, Mesa, llvmpipe (LLVM 15.0.7, 256 bits), OpenGL 4.5 (Core Profile) Mesa 23.2.1)';
+  return _gp.call(this, p);
+};
+"""
+
 
 def log(*a):
     print(*a, flush=True)
@@ -149,26 +170,25 @@ def fetch_download_url(ctx, file_id, token):
 
 
 def download(file_id, version, out):
-    # patchright = playwright fork with anti-bot patches; without it plain
-    # playwright gets flagged by Turnstile ("600010 bot behavior detected")
-    try:
-        from patchright.sync_api import sync_playwright
-        launcher = "patchright"
-    except ImportError:
-        from playwright.sync_api import sync_playwright
-        launcher = "playwright"
-    log(f"browser launcher: {launcher}")
+    from playwright.sync_api import sync_playwright
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(
+        launch_kwargs = dict(
             headless=not os.environ.get("DISPLAY"),
-            channel="chromium",
             args=["--no-sandbox", "--disable-setuid-sandbox",
-                  "--disable-dev-shm-usage", "--disable-gpu"],
+                  "--disable-dev-shm-usage"],
         )
-        ctx = browser.new_context(user_agent=UA, locale="en-US",
+        try:
+            # real Google Chrome: correct brand/UA hints, not CfT "Chromium"
+            browser = p.chromium.launch(channel="chrome", **launch_kwargs)
+            log("browser: real Google Chrome")
+        except Exception as e:
+            log(f"chrome channel unavailable ({e}); falling back to chromium")
+            browser = p.chromium.launch(**launch_kwargs)
+        ctx = browser.new_context(locale="en-US",
                                   viewport={"width": 1920, "height": 1080})
         page = ctx.new_page()
+        page.add_init_script(STEALTH)
         page.on("console", lambda m: log(f"console[{m.type}]: {m.text[:200]}")
                 if m.type in ("error", "warning") else None)
         page.on("pageerror", lambda e: log(f"pageerror: {str(e)[:300]}"))
