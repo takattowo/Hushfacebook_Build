@@ -11,7 +11,21 @@ pip install --quiet curl_cffi cloudscraper
 pip install --quiet "git+https://github.com/Llucs/ApkTap.git"
 
 echo "== Fetch Facebook $VERSION from APKMirror"
-python scripts/fetch_apkmirror.py "$VERSION" apk
+# Cloudflare challenge clearance from datacenter IPs is flaky - retry with backoff.
+ok=false
+for attempt in 1 2 3 4; do
+  echo "-- fetch attempt $attempt"
+  if python scripts/fetch_apkmirror.py "$VERSION" apk; then
+    ok=true
+    break
+  fi
+  echo "attempt $attempt failed; sleeping $((attempt * 30))s"
+  sleep $((attempt * 30))
+done
+if [ "$ok" != "true" ]; then
+  echo "::error::APKMirror fetch failed after 4 attempts"
+  exit 1
+fi
 
 ls -la apk/ || true
 
