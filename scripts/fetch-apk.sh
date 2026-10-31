@@ -6,8 +6,9 @@ set -euo pipefail
 VERSION="$1"
 mkdir -p apk
 
-echo "== Install apktap + curl_cffi (Cloudflare bypass)"
-pip install --quiet apktap curl_cffi
+echo "== Install apktap (GitHub - not on PyPI) + curl_cffi (Cloudflare bypass)"
+pip install --quiet curl_cffi
+pip install --quiet "git+https://github.com/Llucs/ApkTap.git"
 
 echo "== Fetch Facebook $VERSION from APKMirror"
 python scripts/fetch_apkmirror.py "$VERSION" apk
