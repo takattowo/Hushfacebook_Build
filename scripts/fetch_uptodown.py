@@ -3,19 +3,21 @@
 
 Usage: fetch_uptodown.py <version> <outdir>
 
-Uptodown pages carry no Cloudflare interstitial; only the final Download
-button is Turnstile-gated. This script:
-  1. reads /android/versions and picks the row matching <version> with
-     "Android + 11" (that row's file id resolves to the arm64-v8a variant),
-  2. opens its variant page in Chromium (headed under xvfb in CI),
-  3. clicks Download, clicks the Turnstile checkbox if CF shows one,
-  4. saves the file the browser downloads (or fetches the download-url
-     API response directly as a fallback).
+Uptodown pages have no Cloudflare interstitial; the only gate is a
+Turnstile token on the download-url API. This script does not trust the
+page's own button flow (it stalls on CI IPs) - it:
+  1. reads /android/versions and picks <version>'s "Android + 11" row
+     (that file id resolves to the arm64-v8a variant page),
+  2. renders + executes Turnstile itself in Chromium,
+  3. POSTs the token to /ajax/app/<app>/file/<file>/download-url,
+  4. downloads the returned dw.uptodown.com link and verifies size.
 """
+import json
 import os
 import re
 import sys
 import time
+import urllib.request
 
 UT_BASE = "https://facebook.en.uptodown.com/android"
 UA = ("Mozilla/5.0 (X11; Linux x86_64; rv:135.0) Gecko/20100101 "
@@ -27,7 +29,6 @@ def log(*a):
 
 
 def pick_file_id(version):
-    import urllib.request
     req = urllib.request.Request(UT_BASE + "/versions", headers={"User-Agent": UA})
     html = urllib.request.urlopen(req, timeout=30).read().decode("utf-8", "replace")
     rows = re.findall(
@@ -38,8 +39,6 @@ def pick_file_id(version):
         html)
     if not rows:
         return None, None
-    for fid, ver, sdk in rows:
-        log(f"  row: {ver} {sdk} (file {fid})")
     for fid, ver, sdk in rows:
         if ver == version and "+ 11" in sdk:
             return fid, sdk
@@ -69,6 +68,74 @@ def _try_click_turnstile(page):
     return False
 
 
+def solve_turnstile(page, timeout=120):
+    """Render + execute the widget ourselves, return a token or None."""
+    JS = """() => {
+        const el = document.getElementById('download-turnstile-widget');
+        if (!el) return 'no-widget-element';
+        if (typeof window.turnstile === 'undefined') return 'no-turnstile-api';
+        window.__tok = null; window.__terr = null;
+        try {
+            window.__tid = window.turnstile.render(el, {
+                sitekey: el.dataset.sitekey,
+                action: 'download',
+                callback: (t) => { window.__tok = t; },
+                'error-callback': (e) => { window.__terr = String(e); return true; },
+                'timeout-callback': () => { window.__terr = 'timeout'; },
+            });
+            window.turnstile.execute(window.__tid);
+            return 'started';
+        } catch (e) { return 'throw:' + e; }
+    }"""
+    setup = page.evaluate(JS)
+    if setup == "no-widget-element":
+        # widget div is only rendered after the button's flow starts
+        page.eval_on_selector("#detail-download-button", "el => el.click()")
+        time.sleep(2)
+        setup = page.evaluate(JS)
+    log(f"turnstile setup: {setup}")
+    if setup != "started":
+        return None
+
+    deadline = time.time() + timeout
+    last_click = 0.0
+    while time.time() < deadline:
+        tok = page.evaluate("window.__tok")
+        if tok:
+            log("turnstile token received")
+            return tok
+        err = page.evaluate("window.__terr")
+        if err:
+            log(f"::warning::turnstile error: {err}")
+            return None
+        if time.time() - last_click > 5:
+            _try_click_turnstile(page)
+            last_click = time.time()
+        time.sleep(1)
+    log("::warning::turnstile timed out")
+    return None
+
+
+def fetch_download_url(ctx, file_id, token):
+    url = f"{UT_BASE}/ajax/app/16791/file/{file_id}/download-url"
+    resp = ctx.request.post(
+        url,
+        headers={
+            "Content-Type": "application/json",
+            "Origin": "https://facebook.en.uptodown.com",
+            "Referer": f"{UT_BASE}/download/{file_id}-x",
+        },
+        data=json.dumps({"token": token, "onlyXapk": "1"}),
+        timeout=60000,
+    )
+    body = resp.text()
+    log(f"download-url POST -> {resp.status}: {body[:200]}")
+    if resp.status != 200:
+        raise RuntimeError(f"download-url HTTP {resp.status}")
+    data = json.loads(body)
+    return data["data"]["downloadURL"]
+
+
 def download(file_id, version, out):
     from playwright.sync_api import sync_playwright
 
@@ -82,26 +149,9 @@ def download(file_id, version, out):
         ctx = browser.new_context(user_agent=UA, locale="en-US",
                                   viewport={"width": 1920, "height": 1080})
         page = ctx.new_page()
-        holder = {}
-        api_urls = []
-
-        page.on("download", lambda d: holder.setdefault("dl", d))
-
-        def on_response(resp):
-            if "turnstile" in resp.url or "download-url" in resp.url:
-                log(f"resp {resp.status} {resp.url[:160]}")
-            if resp.url.endswith("/download-url"):
-                try:
-                    data = resp.json()["data"]["downloadURL"]
-                    api_urls.append(data)
-                except Exception as e:
-                    log(f"download-url parse failed: {e}")
-        page.on("response", on_response)
-
-        def on_failed(req):
-            if "turnstile" in req.url or "cloudflare" in req.url:
-                log(f"requestfailed: {req.url[:160]} ({req.failure})")
-        page.on("requestfailed", on_failed)
+        page.on("console", lambda m: log(f"console[{m.type}]: {m.text[:200]}")
+                if m.type in ("error", "warning") else None)
+        page.on("pageerror", lambda e: log(f"pageerror: {str(e)[:300]}"))
 
         url = f"{UT_BASE}/download/{file_id}-x"
         log(f"variant page: {url}")
@@ -113,49 +163,30 @@ def download(file_id, version, out):
         if "arm64-v8a" not in body:
             raise RuntimeError("variant page is not arm64-v8a")
 
-        try:
-            # force: ad/consent overlays occasionally cover the button
-            page.eval_on_selector("#detail-download-button", "el => el.click()")
-        except Exception:
-            page.click("#detail-download-button", force=True)
-        log("clicked Download; waiting for Turnstile / file...")
-        log("turnstile api: " + page.evaluate(
-            "typeof window.turnstile === 'undefined' ? 'MISSING' : 'loaded'"))
-
-        deadline = time.time() + 180
-        last_click = 0.0
-        while time.time() < deadline and "dl" not in holder:
-            if time.time() - last_click > 5:
-                if _try_click_turnstile(page):
-                    log("turnstile clicked")
-                last_click = time.time()
-            if api_urls:
-                break
-            time.sleep(1)
-
-        if "dl" in holder:
-            holder["dl"].save_as(out)
-        elif api_urls:
-            file_url = "https://dw.uptodown.com/dwn/" + api_urls[-1]
-            log(f"api download-url: {file_url}")
-            resp = ctx.request.get(file_url, timeout=300000)
-            if resp.status != 200:
-                raise RuntimeError(f"download-url fetch HTTP {resp.status}")
-            with open(out, "wb") as fh:
-                fh.write(resp.body())
-        else:
+        # settle consent/cookie overlays so the widget iframe is clickable
+        for sel in ("#truste-consent-button", "button:has-text('Accept')",
+                    "#onetrust-accept-btn-handler"):
             try:
-                diag = page.evaluate("""() => ({
-                    turnstile: typeof window.turnstile,
-                    widget: (document.getElementById('download-turnstile-widget')||{}).outerHTML,
-                    toasts: [...document.querySelectorAll('.toast, .notification, .text-box')]
-                        .map(e => e.innerText.trim()).filter(Boolean).slice(0,5),
-                    url: location.href,
-                })""")
-                log(f"diagnostics: {diag}")
-            except Exception as e:
-                log(f"diagnostics failed: {e}")
-            raise RuntimeError("no download started within 180s")
+                page.locator(sel).first.click(timeout=2000)
+                log(f"dismissed overlay: {sel}")
+            except Exception:
+                pass
+
+        token = solve_turnstile(page)
+        if not token:
+            browser.close()
+            raise RuntimeError("no turnstile token")
+
+        hash_ = fetch_download_url(ctx, file_id, token)
+        file_url = "https://dw.uptodown.com/dwn/" + hash_
+        log(f"fetching {file_url}")
+        resp = ctx.request.get(file_url, headers={"Referer": UT_BASE + "/"},
+                               timeout=300000)
+        if resp.status != 200:
+            raise RuntimeError(f"file fetch HTTP {resp.status}")
+        data = resp.body()
+        with open(out, "wb") as fh:
+            fh.write(data)
         browser.close()
 
 
@@ -170,8 +201,7 @@ def main():
         sys.exit(f"::error::Version {version} not found on Uptodown")
     log(f"selected file {file_id} ({sdk})")
 
-    ext = "xapk"
-    out = os.path.join(outdir, f"facebook.{ext}")
+    out = os.path.join(outdir, "facebook.xapk")
     download(file_id, version, out)
 
     size = os.path.getsize(out)
