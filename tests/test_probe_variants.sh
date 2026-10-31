@@ -69,6 +69,6 @@ run_case() {
 }
 
 run_case default false false false v0.19.0-fb584.0.0.51.56
-run_case amoled false true false v0.19.0-fb584.0.0.51.56-amoled
-run_case material-you false false true v0.19.0-fb584.0.0.51.56-material-you
+run_case amoled false true false v0.19.0-fb584.0.0.51.56
+run_case material-you false false true v0.19.0-fb584.0.0.51.56
 run_case expert true false false v0.19.0-fb584.0.0.51.56-expert

@@ -13,14 +13,6 @@ on:
         description: 'Also enable AMOLED black theme, Material You theme, Disable Play Store updates'
         type: boolean
         default: false
-      amoled:
-        description: Enable only the AMOLED black theme
-        type: boolean
-        default: false
-      material_you:
-        description: Enable only the Material You theme
-        type: boolean
-        default: false
 
 permissions:
   contents: write
@@ -49,8 +41,6 @@ jobs:
         env:
           FORCE: ${{ inputs.force == true }}
           EXPERT: ${{ inputs.expert == true }}
-          AMOLED: ${{ inputs.amoled == true }}
-          MATERIAL_YOU: ${{ inputs.material_you == true }}
         run: bash scripts/probe.sh
 
       - name: Download Facebook APK
@@ -58,23 +48,59 @@ jobs:
         id: fetch
         run: bash scripts/fetch-apk.sh "${{ steps.probe.outputs.fb_version }}"
 
-      - name: Patch
-        if: steps.probe.outputs.need_build == 'true'
-        id: patch
+      - name: Patch default
+        if: steps.probe.outputs.need_build == 'true' && inputs.expert != true
+        id: patch_default
         env:
-          EXPERT: ${{ inputs.expert == true }}
-          AMOLED: ${{ inputs.amoled == true }}
-          MATERIAL_YOU: ${{ inputs.material_you == true }}
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: bash scripts/patch.sh "${{ steps.probe.outputs.fb_version }}" "${{ steps.probe.outputs.hush_tag }}" "${{ steps.fetch.outputs.apk }}"
 
-      - name: Upload artifact
-        if: steps.probe.outputs.need_build == 'true'
+      - name: Patch AMOLED-only
+        if: steps.probe.outputs.need_build == 'true' && inputs.expert != true
+        id: patch_amoled
+        env:
+          AMOLED: 'true'
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: bash scripts/patch.sh "${{ steps.probe.outputs.fb_version }}" "${{ steps.probe.outputs.hush_tag }}" "${{ steps.fetch.outputs.apk }}"
+
+      - name: Patch Material You-only
+        if: steps.probe.outputs.need_build == 'true' && inputs.expert != true
+        id: patch_material_you
+        env:
+          MATERIAL_YOU: 'true'
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: bash scripts/patch.sh "${{ steps.probe.outputs.fb_version }}" "${{ steps.probe.outputs.hush_tag }}" "${{ steps.fetch.outputs.apk }}"
+
+      - name: Patch expert
+        if: steps.probe.outputs.need_build == 'true' && inputs.expert == true
+        id: patch_expert
+        env:
+          EXPERT: 'true'
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: bash scripts/patch.sh "${{ steps.probe.outputs.fb_version }}" "${{ steps.probe.outputs.hush_tag }}" "${{ steps.fetch.outputs.apk }}"
+
+      - name: Upload variants artifact
+        if: steps.probe.outputs.need_build == 'true' && inputs.expert != true
         uses: actions/upload-artifact@v4
         with:
           name: facebook-patched
-          path: ${{ steps.patch.outputs.out }}
+          path: |
+            ${{ steps.patch_default.outputs.out }}
+            ${{ steps.patch_amoled.outputs.out }}
+            ${{ steps.patch_material_you.outputs.out }}
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Upload expert artifact
+        if: steps.probe.outputs.need_build == 'true' && inputs.expert == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: facebook-patched
+          path: ${{ steps.patch_expert.outputs.out }}
           retention-days: 90
           if-no-files-found: error
 
@@ -82,8 +108,17 @@ jobs:
         if: steps.probe.outputs.need_build == 'true'
         env:
           RELEASE_TAG: ${{ steps.probe.outputs.release_tag }}
+          FB_VERSION: ${{ steps.probe.outputs.fb_version }}
+          HUSH_TAG: ${{ steps.probe.outputs.hush_tag }}
+          APK_DEFAULT: ${{ steps.patch_default.outputs.out }}
+          APK_AMOLED: ${{ steps.patch_amoled.outputs.out }}
+          APK_MATERIAL_YOU: ${{ steps.patch_material_you.outputs.out }}
+          APK_EXPERT: ${{ steps.patch_expert.outputs.out }}
           EXPERT: ${{ inputs.expert == true }}
-          AMOLED: ${{ inputs.amoled == true }}
-          MATERIAL_YOU: ${{ inputs.material_you == true }}
           FORCE: ${{ inputs.force == true }}
-        run: bash scripts/release.sh "${{ steps.probe.outputs.fb_version }}" "${{ steps.probe.outputs.hush_tag }}" "${{ steps.patch.outputs.out }}"
+        run: |
+          if [ "$EXPERT" = "true" ]; then
+            bash scripts/release.sh "$FB_VERSION" "$HUSH_TAG" "$APK_EXPERT"
+          else
+            bash scripts/release.sh "$FB_VERSION" "$HUSH_TAG" "$APK_DEFAULT" "$APK_AMOLED" "$APK_MATERIAL_YOU"
+          fi
