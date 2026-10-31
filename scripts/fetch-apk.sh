@@ -1,35 +1,29 @@
 #!/usr/bin/env bash
-# Download the exact Facebook build Hushfacebook documents from APKMirror:
-# (arm64-v8a) (120-640dpi) (Android 11+) bundle -> .apkm (morphe merges splits).
+# Download the exact Facebook build Hushfacebook documents, from Uptodown:
+# (arm64-v8a) (Android + 11) xapk -> morphe merges the splits.
 set -euo pipefail
 
 VERSION="$1"
 mkdir -p apk
 
-echo "== Install apktap (GitHub - not on PyPI) + CF bypass chain"
-pip install --quiet curl_cffi cloudscraper playwright
-pip install --quiet "git+https://github.com/Llucs/ApkTap.git"
-# Full Chromium (apktap would only grab chromium-headless-shell, which
-# Cloudflare challenges forever); xvfb gives it a real display so it runs headed.
+echo "== Install browser tooling"
+pip install --quiet playwright
 python -m playwright install --with-deps chromium
 sudo apt-get install -y -qq xvfb >/dev/null 2>&1 || true
 
-echo "== Fetch Facebook $VERSION from APKMirror"
-# Cloudflare challenge clearance from datacenter IPs is flaky - retry with backoff.
+# Turnstile clearance from CI IPs is flaky - retry with backoff.
 ok=false
-for attempt in 1 2 3 4 5 6; do
+for attempt in 1 2 3 4; do
   echo "-- fetch attempt $attempt"
-  if xvfb-run -a python scripts/fetch_apkmirror.py "$VERSION" apk; then
+  if xvfb-run -a python scripts/fetch_uptodown.py "$VERSION" apk; then
     ok=true
     break
   fi
-  sleep_for=$(( attempt * 30 ))
-  [ "$sleep_for" -gt 120 ] && sleep_for=120
-  echo "attempt $attempt failed; sleeping ${sleep_for}s"
-  sleep "$sleep_for"
+  echo "attempt $attempt failed; sleeping $((attempt * 30))s"
+  sleep $((attempt * 30))
 done
 if [ "$ok" != "true" ]; then
-  echo "::error::APKMirror fetch failed after 6 attempts"
+  echo "::error::Uptodown fetch failed after 4 attempts"
   exit 1
 fi
 
