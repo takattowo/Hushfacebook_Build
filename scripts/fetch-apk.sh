@@ -18,7 +18,9 @@ echo "== Versions APKPure has (debug info)"
 
 echo "== Download $PACKAGE version $VERSION"
 # acknowledge_dangers: APKPure is a third-party mirror (see USAGE-apkpure.md)
-"$APKEEP" -a "$PACKAGE@$VERSION" -d apk-pure -o 'acknowledge_dangers=true' apk/
+# arch=arm64-v8a: old-device variants pack code into store-0.dex.spo which no
+# Hushfacebook patch can read (patcher: "Patch the arm64 Android 11+ build").
+"$APKEEP" -a "$PACKAGE@$VERSION" -d apk-pure -o 'acknowledge_dangers=true,arch=arm64-v8a' apk/
 ls -la apk/
 
 APK=$(find apk -maxdepth 1 -type f \( -name '*.apk' -o -name '*.xapk' -o -name '*.apkm' -o -name '*.apks' \) | head -n1 || true)
