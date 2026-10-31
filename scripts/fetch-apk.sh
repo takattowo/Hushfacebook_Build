@@ -17,7 +17,8 @@ echo "== Versions APKPure has (debug info)"
 "$APKEEP" -l -a "$PACKAGE" -d apk-pure | tee apkeep-versions.txt || echo "::warning::version listing failed, continuing"
 
 echo "== Download $PACKAGE version $VERSION"
-"$APKEEP" -a "$PACKAGE@$VERSION" -d apk-pure apk/
+# acknowledge_dangers: APKPure is a third-party mirror (see USAGE-apkpure.md)
+"$APKEEP" -a "$PACKAGE@$VERSION" -d apk-pure -o 'acknowledge_dangers=true' apk/
 ls -la apk/
 
 APK=$(find apk -maxdepth 1 -name '*.apk' | head -n1 || true)

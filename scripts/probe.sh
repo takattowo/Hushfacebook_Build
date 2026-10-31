@@ -27,7 +27,7 @@ java -jar "$JAR" list-versions \
   --patches "$MPP" \
   --filter-package-names "$PACKAGE" | tee list-versions.txt
 
-FB_VERSION=$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' list-versions.txt | head -n1 || true)
+FB_VERSION=$(grep -oE '[0-9]+(\.[0-9]+){3,}' list-versions.txt | head -n1 || true)
 if [ -z "$FB_VERSION" ]; then
   echo "::error::Could not parse a Facebook version from list-versions output. See list-versions.txt above."
   exit 1
