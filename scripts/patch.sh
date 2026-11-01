@@ -6,9 +6,13 @@ set -euo pipefail
 FB_VERSION="$1"
 HUSH_TAG="$2"
 APK="$3"
-EXPERT="${EXPERT:-false}"
 AMOLED="${AMOLED:-false}"
 MATERIAL_YOU="${MATERIAL_YOU:-false}"
+
+if [ "$AMOLED" = "true" ] && [ "$MATERIAL_YOU" = "true" ]; then
+  echo "::error::AMOLED and Material You variants cannot be enabled together"
+  exit 1
+fi
 
 : "${KEYSTORE_BASE64:?Missing KEYSTORE_BASE64 Actions secret}"
 : "${KEYSTORE_PASSWORD:?Missing KEYSTORE_PASSWORD Actions secret}"
@@ -20,15 +24,10 @@ JAR=$(ls morphe-desktop-*-all.jar)
 MPP=$(ls patches-*.mpp)
 
 SUFFIX=""
-if [ "$EXPERT" = "true" ]; then
-  SUFFIX="-expert"
-else
-  if [ "$AMOLED" = "true" ]; then
-    SUFFIX="${SUFFIX}-amoled"
-  fi
-  if [ "$MATERIAL_YOU" = "true" ]; then
-    SUFFIX="${SUFFIX}-material-you"
-  fi
+if [ "$AMOLED" = "true" ]; then
+  SUFFIX="-amoled"
+elif [ "$MATERIAL_YOU" = "true" ]; then
+  SUFFIX="-material-you"
 fi
 OUT="Hushfacebook-${FB_VERSION}-${HUSH_TAG}${SUFFIX}.apk"
 
@@ -42,17 +41,13 @@ ARGS=(
   --keystore-entry-password "$KEYSTORE_PASSWORD"
 )
 
-if [ "$EXPERT" = "true" ] || [ "$AMOLED" = "true" ]; then
+if [ "$AMOLED" = "true" ]; then
   ARGS+=(-e "AMOLED black theme")
-fi
-if [ "$EXPERT" = "true" ] || [ "$MATERIAL_YOU" = "true" ]; then
+elif [ "$MATERIAL_YOU" = "true" ]; then
   ARGS+=(-e "Material You theme")
 fi
-if [ "$EXPERT" = "true" ]; then
-  ARGS+=(-e "Disable Play Store updates")
-fi
 
-echo "== Patching $APK -> $OUT (expert=$EXPERT, amoled=$AMOLED, material_you=$MATERIAL_YOU)"
+echo "== Patching $APK -> $OUT (amoled=$AMOLED, material_you=$MATERIAL_YOU)"
 java -jar "$JAR" "${ARGS[@]}" "$APK"
 
 if [ ! -f "$OUT" ]; then

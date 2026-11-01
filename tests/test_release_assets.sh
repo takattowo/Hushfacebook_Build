@@ -23,7 +23,6 @@ chmod +x "$TMP/bin/gh"
 PATH="$TMP/bin:$PATH" \
   GH_ARGS_CAPTURE="$TMP/gh-args" \
   RELEASE_TAG=v0.19.0-fb584.0.0.51.56 \
-  EXPERT=false \
   FORCE=false \
   bash "$ROOT/scripts/release.sh" 584.0.0.51.56 v0.19.0 \
     default.apk amoled.apk material-you.apk
@@ -31,4 +30,4 @@ PATH="$TMP/bin:$PATH" \
 grep -Fxq default.apk "$TMP/gh-args"
 grep -Fxq amoled.apk "$TMP/gh-args"
 grep -Fxq material-you.apk "$TMP/gh-args"
-grep -Fq 'APK variants: Default (all three expert patches disabled), default + AMOLED black theme, and default + Material You theme' "$TMP/gh-args"
+grep -Fq 'APK variants: Default (AMOLED, Material You, and Play Store updates disabled), default + AMOLED black theme, and default + Material You theme' "$TMP/gh-args"

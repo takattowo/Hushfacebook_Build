@@ -34,11 +34,7 @@ if [ -z "$FB_VERSION" ]; then
 fi
 echo "Recommended Facebook: $FB_VERSION"
 
-SUFFIX=""
-if [ "${EXPERT:-false}" = "true" ]; then
-  SUFFIX="-expert"
-fi
-RELEASE_TAG="${HUSH_TAG}-fb${FB_VERSION}${SUFFIX}"
+RELEASE_TAG="${HUSH_TAG}-fb${FB_VERSION}"
 echo "Release tag: $RELEASE_TAG"
 
 NEED=true

@@ -49,14 +49,13 @@ EOF
 chmod +x "$TMP/bin/gh" "$TMP/bin/java"
 
 run_case() {
-  local name="$1" expert="$2" amoled="$3" material_you="$4" expected="$5"
+  local name="$1" amoled="$2" material_you="$3" expected="$4"
   local work="$TMP/$name"
   mkdir -p "$work"
   if ! (
     cd "$work"
     PATH="$TMP/bin:$PATH" \
       GITHUB_OUTPUT="$work/output" \
-      EXPERT="$expert" \
       AMOLED="$amoled" \
       MATERIAL_YOU="$material_you" \
       FORCE=false \
@@ -68,7 +67,6 @@ run_case() {
   grep -Fx "release_tag=$expected" "$work/output"
 }
 
-run_case default false false false v0.19.0-fb584.0.0.51.56
-run_case amoled false true false v0.19.0-fb584.0.0.51.56
-run_case material-you false false true v0.19.0-fb584.0.0.51.56
-run_case expert true false false v0.19.0-fb584.0.0.51.56-expert
+run_case default false false v0.19.0-fb584.0.0.51.56
+run_case amoled true false v0.19.0-fb584.0.0.51.56
+run_case material-you false true v0.19.0-fb584.0.0.51.56

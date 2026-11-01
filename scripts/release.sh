@@ -8,7 +8,6 @@ shift 2
 APKS=("$@")
 
 TAG="$RELEASE_TAG"
-EXPERT="${EXPERT:-false}"
 FORCE="${FORCE:-false}"
 
 if [ "$FORCE" = "true" ] && gh release view "$TAG" >/dev/null 2>&1; then
@@ -21,13 +20,7 @@ if gh release view "$TAG" >/dev/null 2>&1; then
   exit 0
 fi
 
-PATCH_NOTE="- APK variants: Default (all three expert patches disabled), default + AMOLED black theme, and default + Material You theme"
-if [ "$EXPERT" = "true" ]; then
-  PATCH_NOTE="- Patches: default set plus all three expert patches (AMOLED black theme, Material You theme, Disable Play Store updates)"
-  TITLE_SUFFIX=" (Expert)"
-else
-  TITLE_SUFFIX=""
-fi
+PATCH_NOTE="- APK variants: Default (AMOLED, Material You, and Play Store updates disabled), default + AMOLED black theme, and default + Material You theme"
 
 NOTES=$(cat <<EOF
 Prebuilt patched Facebook, built by GitHub Actions.
@@ -53,7 +46,7 @@ EOF
 
 echo "== Creating release $TAG"
 gh release create "$TAG" "${APKS[@]}" \
-  --title "Facebook $FB_VERSION + Hushfacebook $HUSH_TAG$TITLE_SUFFIX" \
+  --title "Facebook $FB_VERSION + Hushfacebook $HUSH_TAG" \
   --notes "$NOTES"
 
 echo "== Release created"
