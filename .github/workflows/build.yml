@@ -10,7 +10,7 @@ on:
         type: boolean
         default: false
       expert:
-        description: 'Also enable AMOLED black theme, Material You theme, Disable Play Store updates'
+        description: 'Add all three expert patches to default set: AMOLED black theme, Material You theme, Disable Play Store updates'
         type: boolean
         default: false
 
@@ -56,7 +56,7 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: bash scripts/patch.sh "${{ steps.probe.outputs.fb_version }}" "${{ steps.probe.outputs.hush_tag }}" "${{ steps.fetch.outputs.apk }}"
 
-      - name: Patch AMOLED-only
+      - name: Patch default + AMOLED
         if: steps.probe.outputs.need_build == 'true' && inputs.expert != true
         id: patch_amoled
         env:
@@ -65,7 +65,7 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: bash scripts/patch.sh "${{ steps.probe.outputs.fb_version }}" "${{ steps.probe.outputs.hush_tag }}" "${{ steps.fetch.outputs.apk }}"
 
-      - name: Patch Material You-only
+      - name: Patch default + Material You
         if: steps.probe.outputs.need_build == 'true' && inputs.expert != true
         id: patch_material_you
         env:

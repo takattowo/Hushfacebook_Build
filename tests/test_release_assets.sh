@@ -31,4 +31,4 @@ PATH="$TMP/bin:$PATH" \
 grep -Fxq default.apk "$TMP/gh-args"
 grep -Fxq amoled.apk "$TMP/gh-args"
 grep -Fxq material-you.apk "$TMP/gh-args"
-grep -Fq 'APK variants: Default (all three expert patches disabled), AMOLED-only, and Material You-only' "$TMP/gh-args"
+grep -Fq 'APK variants: Default (all three expert patches disabled), default + AMOLED black theme, and default + Material You theme' "$TMP/gh-args"

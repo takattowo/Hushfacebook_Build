@@ -21,9 +21,9 @@ if gh release view "$TAG" >/dev/null 2>&1; then
   exit 0
 fi
 
-PATCH_NOTE="- APK variants: Default (all three expert patches disabled), AMOLED-only, and Material You-only"
+PATCH_NOTE="- APK variants: Default (all three expert patches disabled), default + AMOLED black theme, and default + Material You theme"
 if [ "$EXPERT" = "true" ]; then
-  PATCH_NOTE="- Patches: all, expert trio included (AMOLED black theme, Material You theme, Disable Play Store updates)"
+  PATCH_NOTE="- Patches: default set plus all three expert patches (AMOLED black theme, Material You theme, Disable Play Store updates)"
   TITLE_SUFFIX=" (Expert)"
 else
   TITLE_SUFFIX=""

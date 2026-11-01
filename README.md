@@ -2,7 +2,7 @@
 
 Automated GitHub Actions builds of patched Facebook APKs using [Hushfacebook](https://github.com/SysAdminDoc/Hushfacebook) and [morphe-desktop](https://github.com/MorpheApp/morphe-desktop).
 
-Download the default, AMOLED-only, and Material You-only APKs from [Releases](https://github.com/takattowo/Hushfacebook_Build/releases).
+Download the default, default + AMOLED, and default + Material You APKs from [Releases](https://github.com/takattowo/Hushfacebook_Build/releases). The expert build adds all three expert patches to the default set.
 
 ## Credits
 
