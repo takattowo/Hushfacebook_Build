@@ -2,7 +2,7 @@
 
 Automated GitHub Actions builds of patched Facebook APKs using [Hushfacebook](https://github.com/SysAdminDoc/Hushfacebook) and [morphe-desktop](https://github.com/MorpheApp/morphe-desktop).
 
-Download the default, default + AMOLED, or default + Material You APK from [Releases](https://github.com/takattowo/Hushfacebook_Build/releases). AMOLED and Material You are separate variants and cannot be combined.
+Download from [Releases](https://github.com/takattowo/Hushfacebook_Build/releases).
 
 ## Credits
 
