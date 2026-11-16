@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Download the exact Facebook build Hushfacebook documents, from Uptodown:
-# arm64-v8a xapk -> morphe merges the splits.
+# Download the exact Facebook build Hushfacebook documents, from APKPure:
+# arm64-v8a / Android 11+ xapk -> morphe merges the splits.
 set -euo pipefail
 
 VERSION="$1"
 mkdir -p apk
 
-# Uptodown API calls are quick but can hit transient edge errors - retry.
+# APKPure/CDN calls are quick but can hit transient edge errors - retry.
 ok=false
 for attempt in 1 2 3 4; do
   echo "-- fetch attempt $attempt"
-  if python scripts/fetch_uptodown.py "$VERSION" apk; then
+  if python scripts/fetch_apkpure.py "$VERSION" apk; then
     ok=true
     break
   fi
@@ -18,7 +18,7 @@ for attempt in 1 2 3 4; do
   sleep $((attempt * 30))
 done
 if [ "$ok" != "true" ]; then
-  echo "::error::Uptodown fetch failed after 4 attempts"
+  echo "::error::APKPure fetch failed after 4 attempts"
   exit 1
 fi
 
