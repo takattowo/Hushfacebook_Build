@@ -1,23 +1,16 @@
 #!/usr/bin/env bash
 # Download the exact Facebook build Hushfacebook documents, from Uptodown:
-# (arm64-v8a) (Android + 11) xapk -> morphe merges the splits.
+# arm64-v8a xapk -> morphe merges the splits.
 set -euo pipefail
 
 VERSION="$1"
 mkdir -p apk
 
-echo "== Install browser tooling"
-pip install --quiet playwright
-# real Google Chrome preferred (channel=chrome); chromium as fallback
-python -m playwright install --with-deps chrome || \
-  python -m playwright install --with-deps chromium
-sudo apt-get install -y -qq xvfb >/dev/null 2>&1 || true
-
-# Turnstile clearance from CI IPs is flaky - retry with backoff.
+# Uptodown API calls are quick but can hit transient edge errors - retry.
 ok=false
 for attempt in 1 2 3 4; do
   echo "-- fetch attempt $attempt"
-  if xvfb-run -a python scripts/fetch_uptodown.py "$VERSION" apk; then
+  if python scripts/fetch_uptodown.py "$VERSION" apk; then
     ok=true
     break
   fi
