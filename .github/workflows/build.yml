@@ -40,7 +40,7 @@ jobs:
       - name: Download Facebook APK
         if: steps.probe.outputs.need_build == 'true'
         id: fetch
-        run: bash scripts/fetch-apk.sh "${{ steps.probe.outputs.fb_version }}"
+        run: bash scripts/fetch-apk.sh "${{ steps.probe.outputs.fb_version }}" "${{ steps.probe.outputs.fb_arm64_code }}"
 
       - name: Patch default
         if: steps.probe.outputs.need_build == 'true'

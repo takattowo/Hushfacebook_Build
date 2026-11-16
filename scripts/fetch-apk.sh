@@ -4,13 +4,14 @@
 set -euo pipefail
 
 VERSION="$1"
+ARM64_CODE="$2"
 mkdir -p apk
 
 # APKPure/CDN calls are quick but can hit transient edge errors - retry.
 ok=false
 for attempt in 1 2 3 4; do
   echo "-- fetch attempt $attempt"
-  if python scripts/fetch_apkpure.py "$VERSION" apk; then
+  if python scripts/fetch_apkpure.py "$VERSION" "$ARM64_CODE" apk; then
     ok=true
     break
   fi

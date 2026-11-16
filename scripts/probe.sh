@@ -27,12 +27,17 @@ java -jar "$JAR" list-versions \
   --patches "$MPP" \
   --filter-package-names "$PACKAGE" | tee list-versions.txt
 
-FB_VERSION=$(grep -oE '[0-9]+(\.[0-9]+){3,}' list-versions.txt | head -n1 || true)
-if [ -z "$FB_VERSION" ]; then
-  echo "::error::Could not parse a Facebook version from list-versions output. See list-versions.txt above."
+# The first version line also carries each ABI's version code. Fetching the
+# arm64 build by code avoids scraping APKPure's version page (403 from CI)
+# and guarantees the architecture Hushfacebook documents.
+SUPPORTED=$(grep -m1 -E 'ARM64_V8A=[0-9]+' list-versions.txt || true)
+FB_VERSION=$(printf '%s\n' "$SUPPORTED" | grep -oE '[0-9]+(\.[0-9]+){3,}' | head -n1 || true)
+FB_ARM64_CODE=$(printf '%s\n' "$SUPPORTED" | grep -oE 'ARM64_V8A=[0-9]+' | head -n1 | cut -d= -f2 || true)
+if [ -z "$FB_VERSION" ] || [ -z "$FB_ARM64_CODE" ]; then
+  echo "::error::Could not parse a Facebook version and arm64 version code from list-versions output. See list-versions.txt above."
   exit 1
 fi
-echo "Recommended Facebook: $FB_VERSION"
+echo "Recommended Facebook: $FB_VERSION (arm64 versionCode $FB_ARM64_CODE)"
 
 RELEASE_TAG="${HUSH_TAG}-fb${FB_VERSION}"
 echo "Release tag: $RELEASE_TAG"
@@ -50,6 +55,7 @@ fi
 {
   echo "hush_tag=$HUSH_TAG"
   echo "fb_version=$FB_VERSION"
+  echo "fb_arm64_code=$FB_ARM64_CODE"
   echo "release_tag=$RELEASE_TAG"
   echo "need_build=$NEED"
 } >> "$GITHUB_OUTPUT"

@@ -1,27 +1,25 @@
 #!/usr/bin/env python3
 """Download the exact Facebook build Hushfacebook documents, from APKPure.
 
-Usage: fetch_apkpure.py <version> <outdir>
+Usage: fetch_apkpure.py <version> <arm64_version_code> <outdir>
 
-Hushfacebook needs the "(arm64-v8a) (Android 11+)" bundle. Older Android 9
-and 8.0 builds hide their code in a compressed secondary-dex archive that the
-patcher cannot read, so picking the wrong variant makes every patch fail.
-
-APKPure lists each variant's architecture and minimum Android version. This
-script picks the arm64-v8a / Android 11+ XAPK for <version>, downloads it,
-and verifies the SHA-1 APKPure publishes for that variant.
+APKPure's version page sits behind bot protection that rejects GitHub Actions,
+but its download host accepts a version code directly. The Hushfacebook bundle
+reports the arm64-v8a APK version code it patches, so download that code and
+verify the result: same package and version, minSdk >= 30 (Android 11+), and an
+arm64-v8a base APK. The Android 9/8 builds hide their code in a compressed
+secondary-dex archive the patcher cannot read, so the wrong SDK breaks patching.
 """
-import hashlib
+import json
 import os
-import re
+import shutil
 import sys
-import time
+import tempfile
 import urllib.request
+import zipfile
 
-VERSION_PAGE = "https://apkpure.com/facebook-app/com.facebook.katana/download/"
-DOWNLOAD_URL = ("https://d.apkpure.com/b/XAPK/com.facebook.katana"
-                "?versionCode={}")
-
+PACKAGE = "com.facebook.katana"
+DOWNLOAD_URL = "https://d.apkpure.com/b/XAPK/{package}?versionCode={code}"
 UA = ("Mozilla/5.0 (X11; Linux x86_64; rv:135.0) Gecko/20100101 "
       "Firefox/135.0")
 
@@ -30,117 +28,111 @@ def log(*a):
     print(*a, flush=True)
 
 
-def fetch_page(version):
-    url = VERSION_PAGE + version
-    last_err = None
-    for attempt in range(1, 4):
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": UA})
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                return resp.read().decode("utf-8", "replace")
-        except Exception as e:
-            last_err = e
-            log(f"::warning::APKPure page fetch attempt {attempt} failed: {e}")
-            time.sleep(5 * attempt)
-    sys.exit(f"::error::Could not load APKPure page for {version}: {last_err}")
+def fail(message):
+    sys.exit("::error::" + message)
 
 
-def pick_variant(html, version):
-    # Each variant is one <div class="apk" data-dt-app=...> block containing
-    # its download link, architecture, minimum Android version, size, SHA-1.
-    blocks = re.split(r'<div class="apk" data-dt-app=', html)[1:]
-    found = []
-    for block in blocks:
-        code = re.search(
-            r'https://d\.apkpure\.com/b/XAPK/com\.facebook\.katana'
-            r'\?versionCode=(\d+)', block)
-        name = re.search(r'<span class="name one-line">([^<]+)</span>', block)
-        arch = re.search(
-            r'<span class="label">Architecture</span>'
-            r'<span class="value">([^<]+)</span>', block)
-        android = re.search(
-            r'<span class="label">Requires Android</span>'
-            r'<span class="value">([^<]+)</span>', block)
-        sha1 = re.search(
-            r'<span class="label">File SHA1</span>'
-            r'<span class="value">([^<]+)</span>', block)
-        size = re.search(r'<span class="size">([^<]+)</span>', block)
-        if not (code and name and arch and android and sha1):
-            continue
-        if name.group(1).strip() != version:
-            continue
-        api = re.search(r'API (\d+)', android.group(1))
-        found.append({
-            "versionCode": code.group(1),
-            "arch": arch.group(1).strip(),
-            "android": android.group(1).strip(),
-            "api": int(api.group(1)) if api else 0,
-            "sha1": sha1.group(1).strip().lower(),
-            "size": size.group(1).strip() if size else "?",
-        })
-
-    if not found:
-        log("::warning::No APKPure variants matched version " + version)
-
-    for v in found:
-        if v["arch"] == "arm64-v8a" and v["api"] >= 30:
-            return v
-
-    listing = ", ".join(f'{v["arch"]}/{v["android"]}' for v in found) or "none"
-    sys.exit(f"::error::APKPure has no arm64-v8a Android 11+ bundle for "
-             f"{version} (found: {listing})")
-
-
-def sha1_file(path):
-    digest = hashlib.sha1()
-    with open(path, "rb") as fh:
-        for chunk in iter(lambda: fh.read(1 << 20), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def download(version, variant, out):
-    url = DOWNLOAD_URL.format(variant["versionCode"])
-    log(f"fetching {url}")
+def download(url, out):
+    part = out + ".part"
     req = urllib.request.Request(url, headers={"User-Agent": UA})
-    written = 0
-    with urllib.request.urlopen(req, timeout=600) as resp, open(out, "wb") as fh:
-        expected = resp.headers.get("Content-Length")
-        while True:
-            chunk = resp.read(1 << 20)
-            if not chunk:
-                break
-            fh.write(chunk)
-            written += len(chunk)
-        if expected and written != int(expected):
-            sys.exit(f"::error::Truncated download: {written} of {expected} bytes")
+    try:
+        with urllib.request.urlopen(req, timeout=600) as resp, \
+                open(part, "wb") as fh:
+            expected = resp.headers.get("Content-Length")
+            written = 0
+            while True:
+                chunk = resp.read(1 << 20)
+                if not chunk:
+                    break
+                fh.write(chunk)
+                written += len(chunk)
+            if expected and written != int(expected):
+                fail(f"Truncated download: {written} of {expected} bytes")
+        os.replace(part, out)
+    except BaseException:
+        if os.path.exists(part):
+            os.remove(part)
+        raise
+    return written
 
-    actual = sha1_file(out)
-    if actual != variant["sha1"]:
-        sys.exit(f"::error::SHA-1 mismatch: expected {variant['sha1']}, "
-                 f"got {actual}")
-    log(f"downloaded {written} bytes, SHA-1 {actual}")
+
+def parse_int(value, label):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        fail(f"XAPK manifest has an invalid {label}: {value!r}")
+
+
+def verify(path, version, code):
+    try:
+        with zipfile.ZipFile(path) as xapk:
+            bad = xapk.testzip()
+            if bad:
+                fail(f"Corrupt XAPK entry: {bad}")
+            if "manifest.json" not in xapk.namelist():
+                fail("XAPK has no manifest.json")
+            manifest = json.loads(xapk.read("manifest.json"))
+
+            if manifest.get("package_name") != PACKAGE:
+                fail(f"Wrong package: {manifest.get('package_name')!r}")
+            if manifest.get("version_name") != version:
+                fail(f"Wrong version: {manifest.get('version_name')!r}, "
+                     f"wanted {version!r}")
+            if str(manifest.get("version_code")) != str(code):
+                fail(f"Wrong version code: {manifest.get('version_code')!r}, "
+                     f"wanted {code!r}")
+            min_sdk = parse_int(manifest.get("min_sdk_version"), "min_sdk_version")
+            if min_sdk < 30:
+                fail(f"Android {min_sdk} build, need Android 11+ (API 30)")
+
+            base = next((s.get("file") for s in manifest.get("split_apks", [])
+                         if s.get("id") == "base"), None)
+            if not base:
+                fail("XAPK manifest has no base APK")
+
+            with tempfile.TemporaryDirectory() as tmp:
+                base_path = os.path.join(tmp, "base.apk")
+                with xapk.open(base) as src, open(base_path, "wb") as dst:
+                    shutil.copyfileobj(src, dst, 1 << 20)
+                with zipfile.ZipFile(base_path) as apk:
+                    abis = {name.split("/")[1] for name in apk.namelist()
+                            if name.startswith("lib/") and name.count("/") >= 2}
+    except zipfile.BadZipFile as e:
+        fail(f"Downloaded file is not a valid XAPK: {e}")
+    except (ValueError, KeyError) as e:
+        fail(f"Could not read XAPK manifest: {e}")
+
+    if "arm64-v8a" not in abis:
+        fail(f"Base APK is not arm64-v8a (found: {sorted(abis) or 'none'})")
+    log(f"verified {PACKAGE} {version} ({code}), minSdk {min_sdk}, "
+        f"arm64-v8a")
 
 
 def main():
-    if len(sys.argv) != 3:
-        sys.exit("usage: fetch_apkpure.py <version> <outdir>")
-    version, outdir = sys.argv[1], sys.argv[2]
-
-    log(f"== Picking {version} (arm64-v8a, Android 11+) from APKPure")
-    html = fetch_page(version)
-    variant = pick_variant(html, version)
-    log(f"selected versionCode {variant['versionCode']} "
-        f"({variant['arch']}, {variant['android']}, {variant['size']})")
+    if len(sys.argv) != 4:
+        sys.exit("usage: fetch_apkpure.py <version> <arm64_version_code> "
+                 "<outdir>")
+    version, code, outdir = sys.argv[1], sys.argv[2], sys.argv[3]
+    if not code.isdigit():
+        sys.exit(f"::error::arm64 version code is not numeric: {code!r}")
 
     os.makedirs(outdir, exist_ok=True)
     out = os.path.join(outdir, "facebook.xapk")
-    download(version, variant, out)
+    url = DOWNLOAD_URL.format(package=PACKAGE, code=code)
+
+    log(f"== Fetching Facebook {version} (arm64-v8a, versionCode {code})")
+    log(f"fetching {url}")
+    written = download(url, out)
+    try:
+        verify(out, version, code)
+    except BaseException:
+        os.remove(out)
+        raise
 
     size = os.path.getsize(out)
     if size < 10 * 1024 * 1024:
-        sys.exit(f"::error::Downloaded file too small ({size} bytes)")
-    log(f"saved {out} ({size} bytes)")
+        fail(f"Downloaded file too small ({size} bytes)")
+    log(f"saved {out} ({written} bytes)")
 
 
 if __name__ == "__main__":

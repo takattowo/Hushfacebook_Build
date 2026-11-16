@@ -44,7 +44,8 @@ esac
 EOF
 cat > "$TMP/bin/java" <<'EOF'
 #!/usr/bin/env bash
-echo 'Supported Facebook 584.0.0.51.56'
+echo 'Most common compatible versions:'
+echo '	584.0.0.51.56 [versionCodes: ARM64_V8A=476007758, ARMEABI_V7A=476007757] (100 patches)'
 EOF
 chmod +x "$TMP/bin/gh" "$TMP/bin/java"
 
@@ -65,6 +66,7 @@ run_case() {
     return 1
   fi
   grep -Fx "release_tag=$expected" "$work/output"
+  grep -Fx "fb_arm64_code=476007758" "$work/output"
 }
 
 run_case default false false v0.19.0-fb584.0.0.51.56
